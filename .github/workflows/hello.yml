@@ -1,5 +1,7 @@
 name: Say hello
 
+# siempre que se ejecute un push en la rama main, se ejecutará el job hello_world, 
+# que imprimirá un mensaje y la fecha actual en la consola de GitHub Actions.
 on:
   push:
     branches:
