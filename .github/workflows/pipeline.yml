@@ -7,10 +7,14 @@ on:
     branches: [main]
     types: [opened, synchronize]
 
-jobs:
+permissions:
+  actions: write    # This is required for syfle/cancel-workflow-action
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout 
 
+jobs:
   avoid_reduncy:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Cancel Previous Redundant Builds
         uses: styfle/cancel-workflow-action@0.9.1
@@ -18,24 +22,24 @@ jobs:
           access_token: ${{ github.token }}
 
   lint:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v2
         with:
           cache: 'npm'
-          node-version: '14'
+          node-version: '20'
       - name: Install dependencies
         run: npm ci
       - name: Lint
         run: npm run eslint
 
   build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v2
@@ -53,15 +57,15 @@ jobs:
 
   test:
     needs: [lint, build]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v2
         with:
           cache: 'npm'
-          node-version: '14'
+          node-version: '20'
       - name: Install dependencies
         run: npm ci
       - uses: actions/download-artifact@v2
@@ -73,15 +77,15 @@ jobs:
 
   e2e:
     needs: [lint, build]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v2
         with:
           cache: 'npm'
-          node-version: '14'
+          node-version: '20'
       - name: Install dependencies
         run: npm ci
       - uses: actions/download-artifact@v2
@@ -97,17 +101,16 @@ jobs:
 
   deploy:
     needs: [test, e2e]
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
         with:
-          fetch-depth: 0
-      - name: Deploy to Heroku
-        if: ${{ github.event_name == 'push' }}
-        uses: akhileshns/heroku-deploy@v3.12.12
-        with:
-          heroku_api_key: ${{secrets.HEROKU_API_KEY}}
-          heroku_app_name: ${{secrets.HEROKU_APP}}
-          heroku_email: ${{secrets.HEROKU_API_EMAIL}}
-          healthcheck: "https://${{secrets.HEROKU_APP}}.herokuapp.com/health"
-          rollbackonhealthcheckfailed: true
+          role-to-assume: ${{ secrets.AWS_IAM_ROL }}  
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Sync with S3
+        run: aws s3 sync ./dist/ s3://${{ secrets.AWS_BUCKET_NAME }}  
